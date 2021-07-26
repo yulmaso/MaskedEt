@@ -77,6 +77,9 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
         initialized = true
     }
 
+    /**
+     *  Метод сброса алгоритма форматирования.
+     */
     fun reset() {
         hint = null
         mask = null
@@ -146,7 +149,7 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
         val msm = checkNotNull(maskSymbolsMeaning)
         val rm = checkNotNull(resolvedMask)
 
-        val sb = SpannableStringBuilder(m)
+        val sb = SpannableStringBuilder()
         val raw = getRawText(text.toString())
 
         if (raw.isEmpty()) {
@@ -156,23 +159,41 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
 
         var end = false
         rm.forEachIndexed lit@{ mIndex, rawIndex ->
-            if (mIndex > lastTypedPosition) end = true
+            if (rawIndex > raw.lastIndex || end) {
+                end = true
+                sb.append(m[mIndex])
+                sb.setSpan(ForegroundColorSpan(currentHintTextColor), mIndex, mIndex + 1, 0)
+                return@lit
+            }
 
-            if (rawIndex > raw.lastIndex && !showHint && !end)
-                return sb.substring(0, lastValidPosition + 1)
-
-            if (rawIndex == -1 && lastValidPosition == mIndex - 1 && !removeAction && !end) {
+            if (rawIndex == -1) {
+                sb.append(m[mIndex])
                 lastValidPosition++
                 return@lit
             }
 
-            if (rawIndex > -1 && rawIndex < raw.length && msm[m[mIndex]]?.contains(raw[rawIndex]) == true && !end) {
-                sb.replace(mIndex, mIndex + 1, raw[rawIndex].toString())
-                lastValidPosition = mIndex
-                return@lit
+            if (msm[m[mIndex]]?.contains(raw[rawIndex]) == true) {
+                sb.append(raw[rawIndex])
+                lastValidPosition++
             }
 
-            sb.setSpan(ForegroundColorSpan(currentHintTextColor), mIndex, mIndex + 1, 0)
+//            if (mIndex > lastTypedPosition) end = true
+//
+//            if (rawIndex > raw.lastIndex && !showHint && !end)
+//                return sb.substring(0, lastValidPosition + 1)
+//
+//            if (rawIndex == -1 && lastValidPosition == mIndex - 1 && !removeAction && !end) {
+//                lastValidPosition++
+//                return@lit
+//            }
+//
+//            if (rawIndex > -1 && rawIndex < raw.length && msm[m[mIndex]]?.contains(raw[rawIndex]) == true && !end) {
+//                sb.replace(mIndex, mIndex + 1, raw[rawIndex].toString())
+//                lastValidPosition = mIndex
+//                return@lit
+//            }
+//
+//            sb.setSpan(ForegroundColorSpan(currentHintTextColor), mIndex, mIndex + 1, 0)
         }
         return sb
     }
@@ -180,8 +201,10 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
     private fun getRawText(text: String): String {
         val rm = checkNotNull(resolvedMask)
         val sb = StringBuilder()
-        text.forEachIndexed { index, c ->
-            if (index < rm.size && rm[index] != -1 && index < lastTypedPosition) sb.append(c)
+        rm.forEachIndexed { rmIndex, textIndex ->
+            if (textIndex != -1 && textIndex < lastTypedPosition) {
+                sb.append(text[textIndex])
+            }
         }
         return sb.toString()
     }
