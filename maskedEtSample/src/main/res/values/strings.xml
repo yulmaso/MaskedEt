@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">TextMaskTest</string>
+
+    <string name="raw_text_btn">Raw text</string>
+    <string name="reset_btn">Reset</string>
+    <string name="init_btn">Initialize</string>
+</resources>

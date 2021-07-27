@@ -1,2 +1,3 @@
 rootProject.name = "TextMaskTest"
-include ':app'
+include ':maskedEtSample'
+include ':maskedEt'
