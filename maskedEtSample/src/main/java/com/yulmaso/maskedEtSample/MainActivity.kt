@@ -22,8 +22,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        initEt()
-
         rawTextBtn.setOnClickListener {
             tv.text = et.getRawText()
         }

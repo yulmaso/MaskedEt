@@ -14,23 +14,24 @@ import androidx.appcompat.widget.AppCompatEditText
  *  Created by yulmaso
  *  Date: 21.07.2021
  *
- *  Универсальная вьюха для ввода текста с маской. Для работы необходимо установить настройки
- *  форматирования, вызвав метод [setFormattingSettings].
+ *  View for entering text with a mask. To work, you need to set the formatting settings by calling
+ *  the method [setFormattingSettings].
  *
  *  TODO:
- *      1) протестировать сохранение состояния (onSaveInstanceState, onRestoreInstanceState)
- *      2) реализовать возможность выделения текста
- *      3) реализовать возможность переставлять курсор и осуществлять корректное форматирование
- *      при редактировании в середине строки
+ *      1) implement the ability to select text
+ *      2) implement the ability to move cursor and perform correct formatting while user edits
+ *      text the middle of line
  */
-class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context, attrs), TextWatcher {
+class MaskedEt(
+    context: Context,
+    private val attrs: AttributeSet
+) : AppCompatEditText(context, attrs), TextWatcher {
 
     companion object {
         /**
-         *  Символы, отмеченные в [maskSymbolsMeaning] этим значением, являются служебными и
-         *  вписываются в строку автоматически при достижении курсора их позиции.
-         *
-         *  Пробел всегда является служебным символом.
+         *  Mask chars marked with this value in [maskSymbolsMeaning] become service symbols and
+         *  the formatting algorithm inserts them into line automatically when the cursor reaches
+         *  their positions. (Space in mask is always a service symbol)
          */
         const val PATTERN_VALUE = "pattern"
     }
@@ -44,6 +45,7 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
     private var initialized: Boolean = false
     private var lastTypedPosition: Int = -1
     private var lastValidPosition: Int = -1
+    private var removeAction = false
 
     init {
         context.theme.obtainStyledAttributes(attrs, R.styleable.MaskedEt, 0, 0).apply {
@@ -53,25 +55,25 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
     }
 
     /**
-     *  Метод инициализации алгоритма форматирования. Без вызова данного метода вьюха работает как
-     *  простой EditText.
+     *  Formatting algorithm initialization method. Without calling that view will work as a common
+     *  EditText.
      *
-     *  @param mask                 - Маска, по которой осуществляется форматирование.
-     *  @param maskSymbolsMeaning   - Описание каждого символа, из которых состоит [mask].
-     *  @param showHintOnEdit       - Флажок, по которому определяется необходимость отображения
-     *  hint'a во время ввода текста. (Также может быть установлен с помощью атрибута
-     *  [R.styleable.MaskedEt_show_hint_on_edit].
+     *  @param mask                 - Mask for formatting.
+     *  @param maskSymbolsMeaning   - Description of every [mask] symbol.
+     *  @param showHintOnEdit       - Flag, that handles wether to show mask symbols while editing
+     *  in front of cursor, or show it only as a hint. (Also can be set with an attribute
+     *  [R.styleable.MaskedEt_show_hint_on_edit])
      */
     fun setFormattingSettings(
         mask: String,
         maskSymbolsMeaning: Map<Char, String>,
-        showHintOnEdit: Boolean = false
+        showHintOnEdit: Boolean? = null
     ) {
         val msm = maskSymbolsMeaning.toMutableMap().apply { put(' ', PATTERN_VALUE) }
         this.hint = mask
         this.mask = mask
         this.maskSymbolsMeaning = msm
-        this.showHint = showHintOnEdit
+        showHintOnEdit?.let { showHint = it }
 
         val result = mutableListOf<Int>()
         var index = 0
@@ -83,7 +85,7 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
                     result.add(index)
                     index++
                 }
-            } ?: throw IllegalStateException("Char '$c' is not explained for MaskedEt")
+            } ?: throw IllegalStateException("Char '$c' in mask is not explained for MaskedEt")
         }
 
         resolvedMask = result.toTypedArray()
@@ -93,23 +95,28 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
     }
 
     /**
-     *  Метод сброса алгоритма форматирования.
+     *  Method for resetting formatting algorithm.
      */
     fun resetFormatting() {
+        initialized = false
         hint = null
         mask = null
         maskSymbolsMeaning = null
         resolvedMask = null
-        showHint = false
+        showHint = context.theme
+            .obtainStyledAttributes(attrs, R.styleable.MaskedEt, 0, 0)
+            .getBoolean(R.styleable.MaskedEt_show_hint_on_edit, false)
+
         lastTypedPosition = -1
         lastValidPosition = -1
-        initialized = false
+        removeAction = false
         setText("")
     }
 
     /**
-     *  Метод получения "чистого" текста (текста только из тех символов, которые ввел
-     *  пользователь сам, без служебных символов).
+     *  Method for getting raw text.
+     *
+     *  @return String without service symbols
      */
     fun getRawText(): String {
         return if (initialized) getRawText(text.toString()) else text.toString()
@@ -124,6 +131,13 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
             val hashMap = HashMap<Char, String>().apply { putAll(it) }
             state.putSerializable("maskSymbolsMeaning", hashMap)
         }
+        resolvedMask?.let {
+            state.putIntArray("resolvedMask", it.toIntArray())
+        }
+        state.putBoolean("initialized", initialized)
+        state.putInt("lastTypedPosition", lastTypedPosition)
+        state.putInt("lastValidPosition", lastValidPosition)
+        state.putBoolean("removeAction", removeAction)
         return state
     }
 
@@ -134,6 +148,13 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
         bundle.getSerializable("maskSymbolsMeaning")?.let {
             maskSymbolsMeaning = (it as HashMap<Char, String>).toMap()
         }
+        bundle.getIntArray("resolvedMask")?.let {
+            resolvedMask = it.toTypedArray()
+        }
+        initialized = state.getBoolean("initialized")
+        lastTypedPosition = state.getInt("lastTypedPosition")
+        lastValidPosition = state.getInt("lastValidPosition")
+        removeAction = state.getBoolean("removeAction")
         super.onRestoreInstanceState(bundle.getParcelable("super"))
     }
 
@@ -144,25 +165,36 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
         super.onSelectionChanged(selStart, selEnd)
     }
 
-    var removeAction = false
+    private var onTextChanged = false
+    private var onAfterChanged = false
 
     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
     override fun onTextChanged(text: CharSequence?, start: Int, lengthBefore: Int, lengthAfter: Int) {
-        if (initialized && lengthBefore > lengthAfter) {
-            removeAction = true
+        if (!onTextChanged) {
+            onTextChanged = true
+            if (initialized && lengthBefore > lengthAfter) {
+                removeAction = true
+            }
         }
     }
+
     override fun afterTextChanged(s: Editable?) {
-        if (initialized) {
-            removeTextChangedListener(this)
-            s?.let {
-                lastTypedPosition = selectionEnd
-                val formatted = formatText(it)
-                setText(formatted)
-                setSelection(lastValidPosition + 1)
-                removeAction = false
+        if (onTextChanged && !onAfterChanged) {
+            onAfterChanged = true
+
+            if (initialized) {
+                removeTextChangedListener(this)
+                s?.let {
+                    lastTypedPosition = selectionEnd
+                    setText(formatText(it))
+                    setSelection(lastValidPosition + 1)
+                    removeAction = false
+                }
+                addTextChangedListener(this)
             }
-            addTextChangedListener(this)
+
+            onTextChanged = false
+            onAfterChanged = false
         }
     }
 
@@ -173,6 +205,7 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
 
         val sb = SpannableStringBuilder()
         val raw = if (text.length == 1) text else getRawText(text.toString())
+
         lastValidPosition = -1
 
         if (raw.isEmpty()) {
@@ -185,33 +218,35 @@ class MaskedEt(context: Context, attrs: AttributeSet): AppCompatEditText(context
             return sb
         }
 
-        var lastRawIndex = -1
+        var lastHandledRawIndex = -1
 
         rm.forEachIndexed lit@{ mIndex, rawIndex ->
-            if (rawIndex != -1) lastRawIndex = rawIndex
+            if (rawIndex != -1) lastHandledRawIndex = rawIndex
 
             if (rawIndex < raw.length) {
                 if (rawIndex == -1) {
-                    if (removeAction && lastRawIndex == raw.lastIndex) {
+                    if (removeAction && lastHandledRawIndex == raw.lastIndex) {
                         return setFurtherAsHint(mIndex)
-                    } else {
-                        sb.append(m[mIndex])
-                        lastValidPosition++
-                        return@lit
                     }
+
+                    sb.append(m[mIndex])
+                    lastValidPosition++
+                    return@lit
                 }
 
                 if (msm[m[mIndex]]?.contains(raw[rawIndex]) == true) {
                     sb.append(raw[rawIndex])
                     lastValidPosition++
-                } else {
-                    return setFurtherAsHint(mIndex)
+                    return@lit
                 }
 
-            } else if (showHint) {
                 return setFurtherAsHint(mIndex)
+            }
+
+            return if (showHint) {
+                setFurtherAsHint(mIndex)
             } else {
-                return sb.substring(0, rawIndex)
+                sb.substring(0, rawIndex)
             }
         }
 

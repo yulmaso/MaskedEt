@@ -7,6 +7,7 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.rules.ActivityScenarioRule
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -22,6 +23,11 @@ class UITest {
 
     @get:Rule
     val mActivityRule = ActivityScenarioRule(MainActivity::class.java)
+
+    @Before
+    fun setUp() {
+        onView(withId(R.id.init_btn)).perform(click())
+    }
 
     @Test
     fun testCorrectInput1() {
