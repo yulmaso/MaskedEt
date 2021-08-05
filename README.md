@@ -21,7 +21,7 @@ maskedEt.setFormattingSettings(
 )
 ```
 
-With this settings user can type only symbols from "1234567890" on positions of mask with '0' and nothing else. 
+With these settings user can type only symbols from "1234567890" on positions of mask with '0' and nothing else. 
 Other mask symbols marked with ```MaskedEt.PATTERN_VALUE``` are service symbols that appear automatically when cursor reaches their mask position.
 
 To reset formatting algorythm call method ```resetFormatting```.
